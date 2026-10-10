@@ -1,0 +1,11 @@
+#schema=1
+type,question,answers,distractors
+written,"What is the complexity of binary search?","O(log n)|log n|logn",
+written,"Which data structure is FIFO?","queue|a queue",
+written,"Which logical operator is written as a pipe pair in C?","\|\||or",
+truefalse,"Python lists are immutable.","false",
+truefalse,"A hash table guarantees O(1) worst-case lookup.","false",
+multiple,"Which are sorting algorithms?","Merge sort|Quick sort","Dijkstra|BFS"
+multiple,"Which of these are relational databases?","PostgreSQL|SQLite","Redis|MongoDB"
+written,"What does this print?
+print(2 ** 3)","8",
