@@ -21,6 +21,7 @@ export function makeCard(overrides: Partial<Card> = {}): Card {
     question: `Question ${n}`,
     answers: ['answer'],
     distractors: [],
+    explanation: '',
     level: 1 as Level,
     dueDate: '2026-10-10',
     lastReviewedDate: null,

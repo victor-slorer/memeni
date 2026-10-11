@@ -21,8 +21,29 @@ describe('rollover: limbo release', () => {
   });
 
   it('is idempotent on the same day', () => {
-    const r = rollover(limbo, meta({ lastReleaseDate: '2026-10-10' }), DEFAULT_SETTINGS, '2026-10-10', NOW);
+    const first = rollover(limbo, meta({}), DEFAULT_SETTINGS, '2026-10-10', NOW);
+    expect(first.meta.releasedOnLastReleaseDate).toBe(10);
+    const r = rollover(limbo, first.meta, DEFAULT_SETTINGS, '2026-10-10', NOW);
     expect(r.released).toHaveLength(0);
+  });
+
+  it('tops up to the daily limit when it is raised later the same day', () => {
+    const m = meta({ lastReleaseDate: '2026-10-10', releasedOnLastReleaseDate: 10 });
+    const r = rollover(limbo, m, { ...DEFAULT_SETTINGS, newCardsPerDay: 40 }, '2026-10-10', NOW);
+    expect(r.released).toHaveLength(25); // only 25 left in limbo
+    expect(r.meta.releasedOnLastReleaseDate).toBe(35);
+  });
+
+  it('never releases more than the daily limit in total, and starts counting afresh the next day', () => {
+    const m = meta({ lastReleaseDate: '2026-10-10', releasedOnLastReleaseDate: 10 });
+    expect(rollover(limbo, m, { ...DEFAULT_SETTINGS, newCardsPerDay: 5 }, '2026-10-10', NOW).released).toHaveLength(0);
+    const next = rollover(limbo, m, DEFAULT_SETTINGS, '2026-10-11', NOW);
+    expect(next.released).toHaveLength(10);
+    expect(next.meta).toMatchObject({ lastReleaseDate: '2026-10-11', releasedOnLastReleaseDate: 10 });
+  });
+
+  it('does not release when the last release date is in the future (debug date moved back)', () => {
+    expect(rollover(limbo, meta({ lastReleaseDate: '2026-10-12', releasedOnLastReleaseDate: 3 }), DEFAULT_SETTINGS, '2026-10-10', NOW).released).toHaveLength(0);
   });
 
   it('releases once per rollover, not once per skipped day', () => {

@@ -5,6 +5,7 @@ import { EXAMPLE_CSV, EXAMPLE_MD, SCHEMA_DOC } from '../core/import/schema';
 import type { ValidationResult } from '../core/import/types';
 import { validateImport } from '../core/import/validate';
 import { useApp } from './AppContext';
+import { InlineText } from './components/QuestionText';
 import { downloadText, questionPreview } from './util';
 
 interface Loaded {
@@ -151,7 +152,10 @@ export function Import() {
                   <tr key={c.location} style={c.duplicateOfExisting && skipDuplicates ? { opacity: 0.45 } : undefined}>
                     <td style={{ whiteSpace: 'nowrap' }}>{c.location}</td>
                     <td><span className="pill">{c.type}</span></td>
-                    <td>{questionPreview(c.question)}</td>
+                    <td>
+                      <InlineText text={questionPreview(c.question)} />
+                      {c.explanation && <div className="small muted"><InlineText text={questionPreview(c.explanation, 140)} /></div>}
+                    </td>
                     <td>{c.answers.join(' · ')}</td>
                     <td>{c.distractors.join(' · ')}</td>
                   </tr>

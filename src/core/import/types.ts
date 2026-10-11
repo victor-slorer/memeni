@@ -6,6 +6,7 @@ export interface ParsedCard {
   question: string;
   answers: string[];
   distractors: string[];
+  explanation: string; // free text, never split on "|"; '' when absent
   location: string; // e.g. "Line 12"
 }
 
@@ -24,6 +25,7 @@ export interface ValidCard {
   question: string;
   answers: string[];
   distractors: string[];
+  explanation: string;
   location: string;
   duplicateOfExisting: boolean;
 }

@@ -2,6 +2,7 @@ import Papa from 'papaparse';
 import { splitPipes, SUPPORTED_SCHEMA, type ImportIssue, type ParsedCard, type ParseResult } from './types';
 
 const HEADER = ['type', 'question', 'answers', 'distractors'];
+const HEADER_WITH_EXPLANATION = [...HEADER, 'explanation'];
 const SCHEMA_LINE = /^#\s*schema\s*=\s*(\d+)\s*$/i;
 
 function lineOf(text: string, offset: number): number {
@@ -45,24 +46,26 @@ export function parseCsv(input: string): ParseResult {
   }
 
   const [header, ...data] = rows;
-  const got = header.fields.map((h) => h.trim().toLowerCase());
-  if (got.length !== HEADER.length || got.some((h, i) => h !== HEADER[i])) {
-    errors.push({ location: `Line ${header.line}`, message: `Header must be exactly "${HEADER.join(',')}".` });
+  const got = header.fields.map((h) => h.trim().toLowerCase()).join(',');
+  const columns = got === HEADER_WITH_EXPLANATION.join(',') ? HEADER_WITH_EXPLANATION : got === HEADER.join(',') ? HEADER : null;
+  if (!columns) {
+    errors.push({ location: `Line ${header.line}`, message: `Header must be exactly "${HEADER.join(',')}", optionally followed by ",explanation".` });
     return { cards, errors };
   }
 
   for (const { fields, line } of data) {
     const location = `Line ${line}`;
-    if (fields.length !== HEADER.length) {
-      errors.push({ location, message: `Expected ${HEADER.length} fields, found ${fields.length}. Quote fields that contain commas.` });
+    if (fields.length !== columns.length) {
+      errors.push({ location, message: `Expected ${columns.length} fields, found ${fields.length}. Quote fields that contain commas.` });
       continue;
     }
-    const [type, question, answers, distractors] = fields;
+    const [type, question, answers, distractors, explanation = ''] = fields;
     cards.push({
       type: type.trim().toLowerCase(),
       question: question.trim(),
       answers: splitPipes(answers),
       distractors: splitPipes(distractors),
+      explanation: explanation.trim(),
       location,
     });
   }

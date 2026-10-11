@@ -104,6 +104,13 @@ export function SettingsScreen() {
           <input type="checkbox" checked={draft.stripLeadingArticles} onChange={(e) => setDraft({ ...draft, stripLeadingArticles: e.target.checked })} />
           Ignore a leading “a”, “an” or “the” when checking written answers
         </label>
+        <label className="check">
+          <input type="checkbox" checked={draft.pauseTimerOnResult} onChange={(e) => setDraft({ ...draft, pauseTimerOnResult: e.target.checked })} />
+          Pause the session timer on every answer screen, so explanations can be read without time pressure
+        </label>
+        <p className="small muted" style={{ marginTop: '-0.4rem', paddingLeft: '1.6rem' }}>
+          When off, you can still pause for a single card with the Pause button (or P) on the answer screen.
+        </p>
         <p className="small muted">
           Intervals: bins 1–6 every {settings.intervals.join(', ')} days; graduated every {settings.graduatedInterval} days.
         </p>

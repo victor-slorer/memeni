@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { gradeWritten } from '../grading';
 import { parseCsv } from './csv';
 import { parseMarkdown } from './markdown';
 import { EXAMPLE_CSV, EXAMPLE_MD } from './schema';
@@ -19,6 +20,18 @@ describe('splitPipes', () => {
 });
 
 describe('parseCsv', () => {
+  it('reads escaped pipes in sample.csv as part of the answer, end to end', () => {
+    const { cards, errors } = validateImport(parseCsv(sample('sample.csv')).cards, new Set());
+    expect(errors).toEqual([]);
+    const card = cards.find((c) => c.question.includes('pipe pair'))!;
+    expect(card.answers).toEqual(['||', 'or']);
+    expect(card.distractors).toEqual([]);
+    expect(gradeWritten(card.answers, '||', true)).toBe(true);
+    expect(gradeWritten(card.answers, 'OR', true)).toBe(true);
+    expect(gradeWritten(card.answers, '|', true)).toBe(false);
+    expect(gradeWritten(card.answers, '\\|\\|', true)).toBe(false);
+  });
+
   it('requires the schema line', () => {
     const r = parseCsv('type,question,answers,distractors\nwritten,q,a,\n');
     expect(r.errors[0]).toMatchObject({ location: 'Line 1' });
@@ -58,6 +71,32 @@ describe('parseCsv', () => {
   });
 });
 
+describe('explanations', () => {
+  it('reads "- explain:" in Markdown for every card type, unsplit and optional', () => {
+    const r = parseMarkdown(
+      '---\nschema: 1\n---\n### written\nq1\n- answer: a\n- explain: Because a \\|\\| b | c.\n' +
+        '### multiple\nq2\n- explain: Before the answers is fine too.\n- correct: x\n- wrong: y\n### truefalse\nq3\n- answer: true\n',
+    );
+    expect(r.errors).toEqual([]);
+    expect(r.cards.map((c) => c.explanation)).toEqual(['Because a \\|\\| b | c.', 'Before the answers is fine too.', '']);
+  });
+
+  it('accepts an optional explanation column in CSV, and still accepts the 4-column header', () => {
+    const five = parseCsv('#schema=1\ntype,question,answers,distractors,explanation\nwritten,q,a,,"Short, with a comma."\ntruefalse,q2,true,,\n');
+    expect(five.errors).toEqual([]);
+    expect(five.cards.map((c) => c.explanation)).toEqual(['Short, with a comma.', '']);
+    const four = parseCsv('#schema=1\ntype,question,answers,distractors\nwritten,q,a,\n');
+    expect(four.errors).toEqual([]);
+    expect(four.cards[0].explanation).toBe('');
+    expect(parseCsv('#schema=1\ntype,question,answers,distractors,explanation\nwritten,q,a,\n').errors[0].message).toMatch(/Expected 5 fields/);
+  });
+
+  it('flags a repeated explain line', () => {
+    const r = parseMarkdown('---\nschema: 1\n---\n### written\nq\n- answer: a\n- explain: one\n- explain: two\n');
+    expect(r.errors[0]).toMatchObject({ location: 'Line 8', message: expect.stringMatching(/appears twice/) });
+  });
+});
+
 describe('parseMarkdown', () => {
   it('parses the example and the sample deck cleanly', () => {
     for (const text of [EXAMPLE_MD, sample('sample.md')]) {
@@ -78,7 +117,7 @@ describe('parseMarkdown', () => {
 
   it('maps correct/wrong for multiple choice', () => {
     const r = parseMarkdown(EXAMPLE_MD);
-    expect(r.cards[2]).toMatchObject({ type: 'multiple', answers: ['Merge sort', 'Quick sort'], distractors: ['Dijkstra', 'BFS'], location: 'Line 16' });
+    expect(r.cards[2]).toMatchObject({ type: 'multiple', answers: ['Merge sort', 'Quick sort'], distractors: ['Dijkstra', 'BFS'], location: 'Line 17' });
   });
 
   it('reports structural errors with line numbers', () => {
@@ -100,7 +139,7 @@ describe('parseMarkdown', () => {
 });
 
 describe('validateImport', () => {
-  const card = (type: string, answers: string[], distractors: string[] = [], question = 'Q?') => ({ type, question, answers, distractors, location: 'Line 1' });
+  const card = (type: string, answers: string[], distractors: string[] = [], question = 'Q?', explanation = '') => ({ type, question, answers, distractors, explanation, location: 'Line 1' });
   const errorsFor = (c: ReturnType<typeof card>) => validateImport([c], new Set()).errors.map((e) => e.message);
 
   it('enforces the multiple-choice rules', () => {
@@ -111,6 +150,11 @@ describe('validateImport', () => {
     expect(errorsFor(card('multiple', ['A'], ['a']))).toEqual([expect.stringMatching(/more than once/)]);
     expect(errorsFor(card('multiple', ['A'], ['None of the above']))).toEqual([expect.stringMatching(/all\/none/)]);
     expect(errorsFor(card('multiple', ['A', ''], ['B']))).toEqual([expect.stringMatching(/Empty item/)]);
+  });
+
+  it('rejects a multi-line explanation', () => {
+    expect(errorsFor(card('written', ['a'], [], 'Q?', 'one line'))).toEqual([]);
+    expect(errorsFor(card('written', ['a'], [], 'Q?', 'two\nlines'))).toEqual(['Explanation must be a single line.']);
   });
 
   it('enforces true/false and written rules', () => {

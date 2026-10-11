@@ -1,10 +1,10 @@
 // Text offered as downloads on the Import screen.
 
 export const EXAMPLE_CSV = `#schema=1
-type,question,answers,distractors
-written,"What is the complexity of binary search?","O(log n)|log n|logn",
-truefalse,"Python lists are immutable.","false",
-multiple,"Which are sorting algorithms?","Merge sort|Quick sort","Dijkstra|BFS"
+type,question,answers,distractors,explanation
+written,"What is the complexity of binary search?","O(log n)|log n|logn",,"Each step halves the remaining range."
+truefalse,"Python lists are immutable.","false",,"Lists are mutable; tuples are the immutable sequence type."
+multiple,"Which are sorting algorithms?","Merge sort|Quick sort","Dijkstra|BFS",
 `;
 
 export const EXAMPLE_MD = `---
@@ -17,6 +17,7 @@ What does this print?
 print(len([1, 2, 3]))
 \`\`\`
 - answer: 3
+- explain: len counts the elements of the list.
 
 ### truefalse
 Python lists are immutable.
@@ -48,9 +49,14 @@ clean; errors list the line they were found on.
 ## Lists
 Items are separated with "|". Write "\\|" for a literal pipe.
 
+## Explanations (optional)
+One line shown after answering, for any card type. It is plain text and never
+split on "|". Wrap \`code\` in backticks to show it as code.
+
 ## CSV
 The first line must be "#schema=1", the second the header
-"type,question,answers,distractors". Quote fields containing commas, quotes or
+"type,question,answers,distractors" or, with explanations,
+"type,question,answers,distractors,explanation". Quote fields containing commas, quotes or
 line breaks (standard CSV quoting: "" inside a quoted field is a quote).
 "distractors" is only filled for multiple-choice cards.
 
@@ -61,5 +67,6 @@ The file starts with frontmatter containing "schema: 1". Each card starts with a
 fenced code block), followed by its answer lines:
 - written / truefalse:  "- answer: ..."
 - multiple:             "- correct: ..." and "- wrong: ..."
+- optional, any type:   "- explain: ..." (one line)
 
 ${EXAMPLE_MD}`;

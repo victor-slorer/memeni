@@ -16,6 +16,7 @@ export interface Card {
   // truefalse: ['true'] or ['false']
   // multiple: the correct options
   distractors: string[]; // multiple only: the wrong options
+  explanation: string; // one line shown after answering; '' when absent
   level: Level;
   dueDate: DateStr | null; // null while in limbo
   lastReviewedDate: DateStr | null;
@@ -56,6 +57,7 @@ export interface Settings {
   graduatedInterval: number; // days for level 7
   penalty: Penalty;
   stripLeadingArticles: boolean;
+  pauseTimerOnResult: boolean; // stop the session timer while the answer screen is shown
 }
 
 export interface Streak {
@@ -67,6 +69,7 @@ export interface Streak {
 
 export interface Meta {
   lastReleaseDate: DateStr | null;
+  releasedOnLastReleaseDate: number; // cards released that day, so later rollovers can top up to newCardsPerDay
   streak: Streak;
   debugTodayOverride: DateStr | null;
   schemaVersion: number;
@@ -83,10 +86,12 @@ export const DEFAULT_SETTINGS: Settings = {
   graduatedInterval: 64,
   penalty: { mode: 'reset' },
   stripLeadingArticles: true,
+  pauseTimerOnResult: false,
 };
 
 export const DEFAULT_META: Meta = {
   lastReleaseDate: null,
+  releasedOnLastReleaseDate: 0,
   streak: { current: 0, longest: 0, lastCompletedDate: null, freezes: 0 },
   debugTodayOverride: null,
   schemaVersion: DB_SCHEMA_VERSION,

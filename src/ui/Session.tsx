@@ -3,15 +3,15 @@ import { multipleBreakdown } from '../core/grading';
 import { buildQueue, insertRetry, shuffle, type QueueItem } from '../core/queue';
 import { commit, evaluate, type PendingReview } from '../core/review';
 import { allowedOverrides } from '../core/scheduler';
+import { isPaused, pauseTimer, resumeTimer, startTimer, timeLeft, type Timer } from '../core/timer';
 import { levelLabel, type Card, type DateStr, type Level, type Streak } from '../core/types';
 import { useApp } from './AppContext';
 import { BinPicker } from './components/BinPicker';
-import { QuestionText } from './components/QuestionText';
+import { InlineText, QuestionText } from './components/QuestionText';
 
 interface Run {
   sessionId: string;
   date: DateStr;
-  deadline: number; // epoch ms
   cards: Map<string, Card>;
   current: QueueItem;
   remaining: QueueItem[];
@@ -50,6 +50,7 @@ export function Session({ onExit }: { onExit: () => void }) {
   const [typed, setTyped] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [timer, setTimer] = useState<Timer | null>(null);
   const [saving, setSaving] = useState(false);
   const counts = useRef({ answered: 0, firstAttempts: 0, firstCorrect: 0 });
   const started = useRef(false);
@@ -73,13 +74,13 @@ export function Session({ onExit }: { onExit: () => void }) {
       setRun({
         sessionId: session.id,
         date,
-        deadline: Date.now() + settings.sessionMinutes * 60_000,
         cards,
         current,
         remaining,
         retried: new Set(),
         options: optionsFor(cards.get(current.cardId)!),
       });
+      setTimer(startTimer(settings.sessionMinutes * 60_000, Date.now()));
       setPhase({ kind: 'answering' });
     })();
   }, [repo, settings.sessionMinutes]);
@@ -90,12 +91,23 @@ export function Session({ onExit }: { onExit: () => void }) {
   }, []);
 
   const card = run ? run.cards.get(run.current.cardId)! : null;
-  const timeUp = run !== null && now >= run.deadline;
+  const remainingMs = timer ? timeLeft(timer, now) : 0;
+  const timeUp = timer !== null && remainingMs <= 0;
+  const paused = timer !== null && isPaused(timer);
 
   function submit(response: string[]) {
     if (!run || !card || phase.kind !== 'answering') return;
     const pending = evaluate(card, response, run.current.isRetry, settings);
+    if (settings.pauseTimerOnResult && timer) setTimer(pauseTimer(timer, Date.now()));
     setPhase({ kind: 'result', pending, chosen: pending.autoLevel });
+  }
+
+  /** Manual pause on the answer screen: only for this card, Continue always resumes. */
+  function togglePause() {
+    if (!timer || phase.kind !== 'result' || settings.pauseTimerOnResult || timeUp) return;
+    const t = Date.now();
+    setTimer(isPaused(timer) ? resumeTimer(timer, t) : pauseTimer(timer, t));
+    setNow(t);
   }
 
   async function finish(completed: boolean) {
@@ -129,11 +141,14 @@ export function Session({ onExit }: { onExit: () => void }) {
     setSaving(true);
     try {
       const next = await persist(phase.pending, phase.chosen);
-      if (Date.now() >= run.deadline || next.remaining.length === 0) {
+      const t = Date.now();
+      if (!timer || timeLeft(timer, t) <= 0 || next.remaining.length === 0) {
         setRun(next);
         await finish(true);
         return;
       }
+      setTimer(resumeTimer(timer, t));
+      setNow(t);
       const [current, ...remaining] = next.remaining;
       setRun({ ...next, current, remaining, options: optionsFor(next.cards.get(current.cardId)!) });
       setTyped('');
@@ -169,6 +184,8 @@ export function Session({ onExit }: { onExit: () => void }) {
         if (e.key === 'Enter') {
           e.preventDefault();
           void onContinue();
+        } else if (e.key === 'p' || e.key === 'P') {
+          togglePause();
         } else if (/^[1-7]$/.test(e.key) && !phase.pending.isRetry) {
           const l = Number(e.key) as Level;
           if (allowedOverrides(card.level).includes(l)) setPhase({ ...phase, chosen: l });
@@ -231,15 +248,15 @@ export function Session({ onExit }: { onExit: () => void }) {
   return (
     <div>
       <div className="session-head">
-        <span className={`timer ${timeUp ? 'up' : ''}`}>
-          {timeUp ? "Time's up — finish this card" : formatClock(Math.min(run.deadline - now, settings.sessionMinutes * 60_000))}
+        <span className={`timer ${timeUp ? 'up' : ''} ${paused && !timeUp ? 'paused' : ''}`}>
+          {timeUp ? "Time's up — finish this card" : `${paused ? '⏸ ' : ''}${formatClock(remainingMs)}${paused ? ' paused' : ''}`}
         </span>
         <span className="progress">{left} card{left === 1 ? '' : 's'} left</span>
         <span className="spacer" />
         <button onClick={onQuit} disabled={saving}>Quit</button>
       </div>
 
-      <div className="panel card-face">
+      <div className={`panel card-face ${phase.kind === 'answering' ? 'answering' : ''}`}>
         <div className="row small">
           <span className="pill">{levelLabel(card.level)}</span>
           {isRetry && <span className="pill">Retry · practice only</span>}
@@ -296,19 +313,28 @@ export function Session({ onExit }: { onExit: () => void }) {
       </div>
 
       {phase.kind === 'result' && (
-        <div className="panel stack">
-          {isRetry ? (
-            <p className="small muted">Retries are practice only: the card stays in {levelLabel(card.level)}.</p>
-          ) : (
-            <BinPicker
-              levelBefore={card.level}
-              autoLevel={phase.pending.autoLevel}
-              chosen={phase.chosen}
-              settings={settings}
-              onChoose={(l) => setPhase({ ...phase, chosen: l })}
-            />
-          )}
-          <div className="row">
+        <div className="panel result-actions">
+          <div className="result-bins">
+            {isRetry ? (
+              <p className="small muted" style={{ margin: 0 }}>Retries are practice only: the card stays in {levelLabel(card.level)}.</p>
+            ) : (
+              <BinPicker
+                levelBefore={card.level}
+                autoLevel={phase.pending.autoLevel}
+                chosen={phase.chosen}
+                settings={settings}
+                onChoose={(l) => setPhase({ ...phase, chosen: l })}
+              />
+            )}
+          </div>
+          <div className="result-buttons">
+            {settings.pauseTimerOnResult ? (
+              <span className="small muted">Timer paused while you read</span>
+            ) : (
+              <button onClick={togglePause} disabled={timeUp} aria-pressed={paused}>
+                {paused ? 'Resume timer' : 'Pause timer'} <kbd>P</kbd>
+              </button>
+            )}
             <button className="primary" onClick={onContinue} disabled={saving} autoFocus>
               {timeUp || run.remaining.length === 0 ? 'Finish session' : 'Continue'} <kbd>↵</kbd>
             </button>
@@ -321,35 +347,47 @@ export function Session({ onExit }: { onExit: () => void }) {
 
 function Result({ card, pending, options }: { card: Card; pending: PendingReview; options: string[] }) {
   const verdict = (
-    <div className={`verdict ${pending.correct ? 'good' : 'bad'}`}>{pending.correct ? 'Correct' : 'Incorrect'}</div>
+    <span className={`verdict ${pending.correct ? 'good' : 'bad'}`}>{pending.correct ? 'Correct' : 'Incorrect'}</span>
+  );
+  const explanation = card.explanation && (
+    <p className="explanation"><InlineText text={card.explanation} /></p>
   );
 
   if (card.type === 'written') {
     const [shown, ...alsoAccepted] = card.answers;
     return (
-      <div className="stack">
-        {verdict}
-        <div>Your answer: <strong>{pending.response[0]?.trim() || <span className="muted">(empty)</span>}</strong></div>
-        <div>Answer: <strong>{shown}</strong></div>
-        {alsoAccepted.length > 0 && <div className="small muted">Also accepted: {alsoAccepted.join(' · ')}</div>}
+      <div className="result">
+        <div className="result-line">
+          {verdict}
+          <span className="muted">You answered</span>
+          <strong>{pending.response[0]?.trim() || <span className="muted">(nothing)</span>}</strong>
+        </div>
+        <div>
+          Answer: <strong>{shown}</strong>
+          {alsoAccepted.length > 0 && <span className="small muted"> · also accepted: {alsoAccepted.join(' · ')}</span>}
+        </div>
+        {explanation}
       </div>
     );
   }
 
   if (card.type === 'truefalse') {
     return (
-      <div className="stack">
-        {verdict}
-        <div>Answer: <strong>{card.answers[0] === 'true' ? 'True' : 'False'}</strong></div>
+      <div className="result">
+        <div className="result-line">
+          {verdict}
+          <span>The statement is <strong>{card.answers[0] === 'true' ? 'true' : 'false'}</strong>.</span>
+        </div>
+        {explanation}
       </div>
     );
   }
 
   const b = multipleBreakdown(card.answers, pending.response);
   return (
-    <div className="stack">
+    <div className="result">
       {verdict}
-      <div className="options">
+      <div className="options compact">
         {options.map((o) => {
           const cls = b.selectedCorrect.includes(o) ? 'good' : b.wronglySelected.includes(o) ? 'bad' : b.missed.includes(o) ? 'missed' : '';
           const tag = b.selectedCorrect.includes(o) ? 'correct' : b.wronglySelected.includes(o) ? 'wrongly selected' : b.missed.includes(o) ? 'missed' : '';
@@ -361,6 +399,7 @@ function Result({ card, pending, options }: { card: Card; pending: PendingReview
           );
         })}
       </div>
+      {explanation}
     </div>
   );
 }

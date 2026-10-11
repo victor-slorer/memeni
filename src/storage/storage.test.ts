@@ -98,6 +98,25 @@ describe('Repo', () => {
     expect((await repo.getMeta()).streak.current).toBe(1);
   });
 
+  it('stores explanations, and gives cards saved before explanations existed an empty one', async () => {
+    const { repo } = await makeRepo();
+    const [a] = await repo.addCards([{ ...written('q1'), explanation: 'Because.' }]);
+    expect((await repo.getCard(a.id))?.explanation).toBe('Because.');
+    const { explanation: _, ...legacy } = a;
+    await repo.db.put('cards', legacy as typeof a);
+    expect((await repo.getCard(a.id))?.explanation).toBe('');
+    expect((await repo.getAllCards())[0].explanation).toBe('');
+  });
+
+  it('tops up to newCardsPerDay when the setting is raised later the same day', async () => {
+    const { repo } = await makeRepo();
+    await repo.addCards(Array.from({ length: 60 }, (_, i) => written(`q${i}`)));
+    expect((await repo.runRollover()).released).toBe(10);
+    await repo.saveSettings({ ...(await repo.getSettings()), newCardsPerDay: 40 });
+    expect((await repo.runRollover()).released).toBe(30);
+    expect((await repo.runRollover()).released).toBe(0);
+  });
+
   it('resets dates relative to today, keeping levels', async () => {
     const { repo } = await makeRepo();
     const [a, b] = await repo.addCards([written('q1'), written('q2')]);

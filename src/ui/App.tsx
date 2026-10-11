@@ -66,8 +66,8 @@ export function App() {
 
   return (
     <AppContext.Provider value={ctx}>
-      <div className="app">
-        <header className="topbar">
+      <div className={`app ${inSession ? 'in-session' : ''}`}>
+        <header className={`topbar ${inSession ? 'compact' : ''}`}>
           <span className="brand">memeni</span>
           {!inSession && (
             <nav className="tabs">

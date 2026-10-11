@@ -17,9 +17,21 @@ export function QuestionText({ text, className = 'question' }: { text: string; c
         p.code ? (
           <pre key={i}><code>{p.text}</code></pre>
         ) : (
-          <span key={i}>{p.text.replace(/^\n+|\n+$/g, '')}</span>
+          <span key={i}><InlineText text={p.text.replace(/^\n+|\n+$/g, '')} /></span>
         ),
       )}
     </div>
+  );
+}
+
+/** Plain text with `inline code` spans. */
+export function InlineText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`\n]+`)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.length > 2 && p.startsWith('`') && p.endsWith('`') ? <code key={i} className="inline">{p.slice(1, -1)}</code> : p,
+      )}
+    </>
   );
 }

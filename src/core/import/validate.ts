@@ -5,13 +5,14 @@ import type { ImportIssue, ParsedCard, ValidationResult } from './types';
 const ALL_NONE = /^(all|none) of the above$/;
 
 /** Validation errors for a single card; empty when the card is fine. Shared with the card editor. */
-export function validateCardFields(c: Pick<ParsedCard, 'type' | 'question' | 'answers' | 'distractors'>): string[] {
+export function validateCardFields(c: Pick<ParsedCard, 'type' | 'question' | 'answers' | 'distractors' | 'explanation'>): string[] {
   const errs: string[] = [];
   if (!CARD_TYPES.includes(c.type as CardType)) {
     errs.push(`Unknown card type "${c.type}". Use written, truefalse or multiple.`);
     return errs;
   }
   if (c.question.trim() === '') errs.push('Question is empty.');
+  if (/[\r\n]/.test(c.explanation)) errs.push('Explanation must be a single line.');
   if (c.answers.some((a) => a.trim() === '') || c.distractors.some((d) => d.trim() === '')) {
     errs.push('Empty item between "|" separators.');
   }
@@ -72,6 +73,7 @@ export function validateImport(parsed: readonly ParsedCard[], existingQuestions:
         question: p.question,
         answers: p.type === 'truefalse' ? [p.answers[0].toLowerCase()] : p.answers,
         distractors: p.distractors,
+        explanation: p.explanation,
         location: p.location,
         duplicateOfExisting,
       });

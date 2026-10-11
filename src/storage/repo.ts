@@ -20,7 +20,12 @@ import {
 } from '../core/types';
 import type { DB } from './db';
 
-export type NewCard = Pick<Card, 'type' | 'question' | 'answers' | 'distractors'>;
+export type NewCard = Pick<Card, 'type' | 'question' | 'answers' | 'distractors'> & { explanation?: string };
+
+/** Cards stored before a field existed (or restored from an old backup) get its default. */
+function withDefaults(c: Card): Card {
+  return { ...c, explanation: c.explanation ?? '' };
+}
 
 /** All persistence goes through here. `now` is injectable for tests. */
 export class Repo {
@@ -69,12 +74,13 @@ export class Repo {
 
   // ---- cards -----------------------------------------------------------
 
-  getAllCards(): Promise<Card[]> {
-    return this.db.getAll('cards');
+  async getAllCards(): Promise<Card[]> {
+    return (await this.db.getAll('cards')).map(withDefaults);
   }
 
-  getCard(id: string): Promise<Card | undefined> {
-    return this.db.get('cards', id);
+  async getCard(id: string): Promise<Card | undefined> {
+    const c = await this.db.get('cards', id);
+    return c && withDefaults(c);
   }
 
   async existingQuestionKeys(): Promise<Set<string>> {
@@ -97,6 +103,7 @@ export class Repo {
       question: c.question,
       answers: c.answers,
       distractors: c.distractors,
+      explanation: c.explanation ?? '',
       level: LIMBO,
       dueDate: null,
       lastReviewedDate: null,
@@ -118,7 +125,7 @@ export class Repo {
   async updateCardContent(id: string, content: NewCard & { type: CardType }): Promise<Card> {
     const card = await this.getCard(id);
     if (!card) throw new Error(`Card ${id} not found`);
-    const updated = { ...card, ...content, updatedAt: this.nowIso() };
+    const updated = { ...card, ...content, explanation: content.explanation ?? card.explanation, updatedAt: this.nowIso() };
     await this.db.put('cards', updated);
     return updated;
   }

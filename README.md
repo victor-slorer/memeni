@@ -5,7 +5,8 @@ Personal Leitner-style spaced-repetition flashcards for regaining knowledge over
 - 6 bins with intervals 1, 2, 4, 8, 16, 32 days, then "graduated" (every 64 days)
 - Due-date scheduling; time-boxed sessions (default 15 min); new cards wait in limbo and are released 10 per day
 - Card types: written (accepted-answer list), true/false, multiple choice (several correct, count hidden)
-- After each answer you can override the destination bin (1 … current + 1)
+- After each answer you see a one-line explanation and can override the destination bin (1 … current + 1)
+- The timer can pause on the answer screen: always (Settings) or per card (<kbd>P</kbd>)
 - CSV and Markdown import (schema v1), JSON backup, stats, streak with freezes
 - Desktop web app; data lives in the browser's IndexedDB. No accounts, no server.
 
@@ -21,6 +22,18 @@ is pinned to port 5173 (`strictPort`) so your data is always found. `vite previe
 another port and would show an empty deck. Export a JSON backup from Settings now and then.
 
 Try it with `samples/sample.md` (20 CS interview cards) on the Import screen.
+
+## Decks
+
+`decks/` holds the real study decks, one file per topic, each card with a one-line
+explanation. `decks/all.md` merges them with the topics interleaved; it is generated,
+so edit the topic files and run:
+
+```sh
+npm run decks:merge
+```
+
+A test fails if `all.md` is out of date or any deck stops importing cleanly.
 
 ## Develop
 
@@ -48,3 +61,4 @@ The design spec lives in the Obsidian vault: `01-projects/memeni/` (architecture
 - <kbd>T</kbd> / <kbd>F</kbd> true / false
 - <kbd>1</kbd>–<kbd>9</kbd> toggle multiple-choice options
 - <kbd>1</kbd>–<kbd>7</kbd> pick the destination bin on the result screen
+- <kbd>P</kbd> pause/resume the timer on the result screen (this card only; Continue resumes)

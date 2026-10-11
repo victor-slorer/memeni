@@ -16,7 +16,8 @@ export function limboInOrder(cards: readonly Card[]): Card[] {
 
 /**
  * Runs whenever the app opens (or regains focus). Pure: returns what changed.
- * 1. Release the next newCardsPerDay limbo cards once per rollover (not per skipped day).
+ * 1. Release limbo cards until newCardsPerDay have been released today. Skipped days
+ *    don't accumulate; raising the setting or importing later in the day tops up.
  * 2. Streak check for missed days.
  * 3. If the deck has cards but none are due, today counts as completed.
  */
@@ -24,13 +25,14 @@ export function rollover(cards: readonly Card[], meta: Meta, settings: Settings,
   let released: Card[] = [];
   let nextMeta = meta;
 
-  if (meta.lastReleaseDate === null || meta.lastReleaseDate < today) {
+  if (meta.lastReleaseDate === null || meta.lastReleaseDate <= today) {
+    const already = meta.lastReleaseDate === today ? meta.releasedOnLastReleaseDate : 0;
     released = limboInOrder(cards)
-      .slice(0, settings.newCardsPerDay)
+      .slice(0, Math.max(0, settings.newCardsPerDay - already))
       .map((c) => ({ ...c, level: 1 as const, dueDate: today, updatedAt: nowIso }));
-    // Only an actual release uses up today's slot, so cards imported later on a
-    // day that started with an empty limbo are released straight away.
-    if (released.length > 0) nextMeta = { ...nextMeta, lastReleaseDate: today };
+    if (released.length > 0) {
+      nextMeta = { ...nextMeta, lastReleaseDate: today, releasedOnLastReleaseDate: already + released.length };
+    }
   }
 
   nextMeta = { ...nextMeta, streak: checkMissedDays(nextMeta.streak, today) };

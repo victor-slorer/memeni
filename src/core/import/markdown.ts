@@ -1,7 +1,7 @@
 import { splitPipes, SUPPORTED_SCHEMA, type ImportIssue, type ParsedCard, type ParseResult } from './types';
 
 const HEADING = /^###\s+(\S.*?)\s*$/;
-const FIELD = /^-\s+(answer|correct|wrong)\s*:(.*)$/i;
+const FIELD = /^-\s+(answer|correct|wrong|explain)\s*:(.*)$/i;
 const FENCE = /^\s*(```|~~~)/;
 
 interface Draft {
@@ -62,7 +62,7 @@ export function parseMarkdown(input: string): ParseResult {
       return;
     }
     for (const name of d.fields.keys()) {
-      if (name !== spec.answers && name !== spec.distractors) {
+      if (name !== spec.answers && name !== spec.distractors && name !== 'explain') {
         errors.push({ location, message: `"- ${name}:" is not used by ${d.type} cards.` });
       }
     }
@@ -71,6 +71,7 @@ export function parseMarkdown(input: string): ParseResult {
       question: d.body.join('\n').replace(/^\n+|\s+$/g, ''),
       answers: splitPipes(d.fields.get(spec.answers) ?? ''),
       distractors: spec.distractors ? splitPipes(d.fields.get(spec.distractors) ?? '') : [],
+      explanation: (d.fields.get('explain') ?? '').trim(),
       location,
     });
   };

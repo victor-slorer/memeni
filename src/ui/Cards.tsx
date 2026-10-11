@@ -3,6 +3,7 @@ import { validateCardFields } from '../core/import/validate';
 import { normalizeQuestion } from '../core/normalize';
 import { CARD_TYPES, levelLabel, type Card, type CardType, type Level } from '../core/types';
 import { useApp } from './AppContext';
+import { InlineText } from './components/QuestionText';
 import { questionPreview, useLoad } from './util';
 
 type Editing = { mode: 'new' } | { mode: 'edit'; card: Card };
@@ -21,7 +22,7 @@ export function Cards() {
     return cards
       .filter((c) => type === 'all' || c.type === type)
       .filter((c) => level === 'all' || c.level === level)
-      .filter((c) => !q || normalizeQuestion(`${c.question} ${c.answers.join(' ')} ${c.distractors.join(' ')}`).includes(q))
+      .filter((c) => !q || normalizeQuestion(`${c.question} ${c.answers.join(' ')} ${c.distractors.join(' ')} ${c.explanation}`).includes(q))
       .sort((a, b) => a.level - b.level || (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || a.importOrder - b.importOrder);
   }, [cards, query, type, level]);
 
@@ -55,7 +56,7 @@ export function Cards() {
           <tbody>
             {shown.map((c) => (
               <tr key={c.id} className="clickable" onClick={() => setEditing({ mode: 'edit', card: c })}>
-                <td>{questionPreview(c.question)}</td>
+                <td><InlineText text={questionPreview(c.question)} /></td>
                 <td><span className="pill">{c.type}</span></td>
                 <td style={{ whiteSpace: 'nowrap' }}>{levelLabel(c.level)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>{c.dueDate ?? '–'}</td>
@@ -88,6 +89,7 @@ function CardEditor({ editing, allCards, onClose, onSaved }: { editing: Editing;
   const [answers, setAnswers] = useState(initial && initial.type !== 'truefalse' ? initial.answers.join('\n') : '');
   const [tf, setTf] = useState(initial?.type === 'truefalse' ? initial.answers[0] : 'true');
   const [distractors, setDistractors] = useState(initial?.distractors.join('\n') ?? '');
+  const [explanation, setExplanation] = useState(initial?.explanation ?? '');
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -97,6 +99,7 @@ function CardEditor({ editing, allCards, onClose, onSaved }: { editing: Editing;
       question: question.trim(),
       answers: type === 'truefalse' ? [tf] : lines(answers),
       distractors: type === 'multiple' ? lines(distractors) : [],
+      explanation: explanation.replace(/\s+/g, ' ').trim(),
     };
     const errs = validateCardFields(content);
     const key = normalizeQuestion(content.question);
@@ -160,6 +163,15 @@ function CardEditor({ editing, allCards, onClose, onSaved }: { editing: Editing;
             <textarea value={distractors} onChange={(e) => setDistractors(e.target.value)} rows={3} />
           </label>
         )}
+        <label className="field">
+          Explanation <span className="muted small">(optional, one line: shown after answering)</span>
+          <textarea
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value.replace(/\n/g, ' '))}
+            rows={2}
+            style={{ fontFamily: 'inherit', minHeight: 0 }}
+          />
+        </label>
         {errors.length > 0 && <div className="banner bad">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
         <div className="row">
           {initial && <button className="danger" onClick={remove}>Delete</button>}
